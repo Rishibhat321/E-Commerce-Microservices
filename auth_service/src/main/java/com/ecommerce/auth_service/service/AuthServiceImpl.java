@@ -6,7 +6,6 @@ import com.ecommerce.auth_service.entity.Role;
 import com.ecommerce.auth_service.entity.User;
 import com.ecommerce.auth_service.exception.EmailAlreadyExistsException;
 import com.ecommerce.auth_service.exception.InvalidCredentialsException;
-import com.ecommerce.auth_service.exception.InvalidRefreshTokenException;
 import com.ecommerce.auth_service.exception.UserNotFoundException;
 import com.ecommerce.auth_service.repo.RefreshTokenRepo;
 import com.ecommerce.auth_service.repo.UserRepo;
@@ -20,7 +19,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 
@@ -102,6 +100,9 @@ public class AuthServiceImpl implements AuthService{
         // generating access token
         String accessToken = jwtService.generateToken(user.getEmail());
 
+        // revoke previous tokens for the user, every time there is a new login
+        refreshTokenService.revokeAllUserTokens(user);
+
         // after authentication succeeds, create refresh tokens
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
 
@@ -168,34 +169,19 @@ public class AuthServiceImpl implements AuthService{
     @Override
     public AuthResponse refreshToken(RefreshTokenRequest request) {
 
-        // Case 1: token is invalid
-        RefreshToken refreshToken = refreshTokenRepo.findByToken(request.getRefreshToken())
-                .orElseThrow(() -> new InvalidRefreshTokenException("Invalid refresh Token"));
 
-        // Case 2: refresh token revoked if boolean revoked == true
-        if(refreshToken.isRevoked()) {
-             throw new InvalidRefreshTokenException("Refresh token revoked");
-        }
-
-        // Case 3: token got expired, Expiry Time < Current Time
-        if(refreshToken.getExpiryDate().isBefore(LocalDateTime.now())) {
-            throw new InvalidRefreshTokenException("Refresh token expired");
-        }
+        RefreshToken refreshToken = refreshTokenService.validateRefreshToken(request.getRefreshToken());
 
         User user = refreshToken.getUser();
 
         String accessToken = jwtService.generateToken(user.getEmail());
 
-        // set revoked to true, old token can't be used anymore, will create new refres token
-        refreshToken.setRevoked(true);
-
-        // save to db
-        refreshTokenRepo.save(refreshToken);
+        // revoke token
+        refreshTokenService.revokeToken(refreshToken);
 
         // create new refresh token
-        RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(refreshToken.getUser());
-
-
+     //   RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(refreshToken.getUser());
+        RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user);
 
 
         return AuthResponse.builder()
@@ -205,6 +191,15 @@ public class AuthServiceImpl implements AuthService{
                 .message("Access token refreshed successfully")
                 .build();
 
+    }
+
+
+    // logout
+    public void logout(LogoutRequest request) {
+
+        RefreshToken refreshToken = refreshTokenService.validateRefreshToken(request.getRefreshToken());
+
+        refreshTokenService.revokeToken(refreshToken);
     }
 
 

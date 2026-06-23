@@ -92,5 +92,16 @@ public class AuthController {
                 .body(authService.refreshToken(request));
     }
 
+    // logout
+    @PostMapping("/logout")
+    public ResponseEntity<String> logout(@RequestBody LogoutRequest request) {
+
+        authService.logout(request);
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body("Logged out successfully");
+    }
+
 
 }
