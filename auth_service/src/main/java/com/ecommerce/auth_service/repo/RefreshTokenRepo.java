@@ -17,7 +17,7 @@ public interface RefreshTokenRepo extends JpaRepository<RefreshToken, Long> {
     // logout all devices, revoke all tokens
     List<RefreshToken> findByUser(User user);
 
-    List<RefreshToken> findAllByUser(User user);
+    List<RefreshToken> findAllByUserAndRevokedFalse(User user);
 
 
     // for all logout sessions
