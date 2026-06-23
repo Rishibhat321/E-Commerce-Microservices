@@ -1,10 +1,7 @@
 package com.ecommerce.auth_service.controller;
 
 
-import com.ecommerce.auth_service.dto.AuthResponse;
-import com.ecommerce.auth_service.dto.LoginRequest;
-import com.ecommerce.auth_service.dto.RegisterRequest;
-import com.ecommerce.auth_service.dto.UserProfileResponse;
+import com.ecommerce.auth_service.dto.*;
 import com.ecommerce.auth_service.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -84,6 +81,15 @@ public class AuthController {
         return ResponseEntity
                 .status(HttpStatus.OK)
                 .body("User deleted successfully");
+    }
+
+
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthResponse> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(authService.refreshToken(request));
     }
 
 
