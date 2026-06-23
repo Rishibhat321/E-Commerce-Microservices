@@ -1,9 +1,6 @@
 package com.ecommerce.auth_service.service;
 
-import com.ecommerce.auth_service.dto.AuthResponse;
-import com.ecommerce.auth_service.dto.LoginRequest;
-import com.ecommerce.auth_service.dto.RegisterRequest;
-import com.ecommerce.auth_service.dto.UserProfileResponse;
+import com.ecommerce.auth_service.dto.*;
 
 import java.util.List;
 
@@ -18,6 +15,8 @@ public interface AuthService {
     List<UserProfileResponse> getAllUsers();
 
     void deleteUser(Long userId);
+
+    AuthResponse refreshToken(RefreshTokenRequest request);
 
 
 }

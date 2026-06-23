@@ -1,14 +1,14 @@
 package com.ecommerce.auth_service.service;
 
-import com.ecommerce.auth_service.dto.AuthResponse;
-import com.ecommerce.auth_service.dto.LoginRequest;
-import com.ecommerce.auth_service.dto.RegisterRequest;
-import com.ecommerce.auth_service.dto.UserProfileResponse;
+import com.ecommerce.auth_service.dto.*;
+import com.ecommerce.auth_service.entity.RefreshToken;
 import com.ecommerce.auth_service.entity.Role;
 import com.ecommerce.auth_service.entity.User;
 import com.ecommerce.auth_service.exception.EmailAlreadyExistsException;
 import com.ecommerce.auth_service.exception.InvalidCredentialsException;
+import com.ecommerce.auth_service.exception.InvalidRefreshTokenException;
 import com.ecommerce.auth_service.exception.UserNotFoundException;
+import com.ecommerce.auth_service.repo.RefreshTokenRepo;
 import com.ecommerce.auth_service.repo.UserRepo;
 import com.ecommerce.auth_service.util.JwtService;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +20,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 
@@ -34,7 +35,13 @@ public class AuthServiceImpl implements AuthService{
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
 
+    private final RefreshTokenService refreshTokenService;
+    private final RefreshTokenRepo refreshTokenRepo;
 
+
+
+    // after registering, user will get automatically logged in.
+    // so creating access & refresh tokens
     @Override
     public AuthResponse register(RegisterRequest request) {
 
@@ -50,42 +57,22 @@ public class AuthServiceImpl implements AuthService{
                 .role(Role.CUSTOMER)
                 .build();
 
-        userRepo.save(user);
+       User savedUser = userRepo.save(user);
+
+       // creating access token
+        String accessToken = jwtService.generateToken(savedUser.getEmail());
+
+        // refresh tokens
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken(savedUser);
+
 
         return AuthResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken.getToken())
                 .message("User registered successfully")
                 .build();
 
     }
-
-
-    /*
-    @Override
-    public AuthResponse login(LoginRequest request) {
-
-        User user = userRepo.findByEmail(request.getEmail())
-                .orElseThrow(() -> new UserNotFoundException("User not found"));
-
-        boolean matches = passwordEncoder.matches(
-                request.getPassword(),
-                user.getPassword()
-        );
-
-
-        if(!matches) {
-            throw new InvalidCredentialsException("Invalid Credentials");
-        }
-
-        String token = jwtService.generateToken(user.getEmail());
-
-        return AuthResponse.builder()
-                .token(token)
-                .message("Login successful")
-                .build();
-
-    }
-
-     */
 
 
 
@@ -112,10 +99,15 @@ public class AuthServiceImpl implements AuthService{
                 .orElseThrow(() ->
                         new UserNotFoundException("User not found"));
 
-        String token = jwtService.generateToken(user.getEmail());
+        // generating access token
+        String accessToken = jwtService.generateToken(user.getEmail());
+
+        // after authentication succeeds, create refresh tokens
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
 
         return AuthResponse.builder()
-                .token(token)
+                .accessToken(accessToken)
+                .refreshToken(refreshToken.getToken())
                 .message("Login successful")
                 .build();
     }
@@ -170,6 +162,48 @@ public class AuthServiceImpl implements AuthService{
                         new UserNotFoundException("User not found"));
 
         userRepo.delete(user);
+
+    }
+
+    @Override
+    public AuthResponse refreshToken(RefreshTokenRequest request) {
+
+        // Case 1: token is invalid
+        RefreshToken refreshToken = refreshTokenRepo.findByToken(request.getRefreshToken())
+                .orElseThrow(() -> new InvalidRefreshTokenException("Invalid refresh Token"));
+
+        // Case 2: refresh token revoked if boolean revoked == true
+        if(refreshToken.isRevoked()) {
+             throw new InvalidRefreshTokenException("Refresh token revoked");
+        }
+
+        // Case 3: token got expired, Expiry Time < Current Time
+        if(refreshToken.getExpiryDate().isBefore(LocalDateTime.now())) {
+            throw new InvalidRefreshTokenException("Refresh token expired");
+        }
+
+        User user = refreshToken.getUser();
+
+        String accessToken = jwtService.generateToken(user.getEmail());
+
+        // set revoked to true, old token can't be used anymore, will create new refres token
+        refreshToken.setRevoked(true);
+
+        // save to db
+        refreshTokenRepo.save(refreshToken);
+
+        // create new refresh token
+        RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(refreshToken.getUser());
+
+
+
+
+        return AuthResponse.builder()
+                .accessToken(accessToken)
+          //      .refreshToken(refreshToken.getToken())
+                .refreshToken(newRefreshToken.getToken())
+                .message("Access token refreshed successfully")
+                .build();
 
     }
 
