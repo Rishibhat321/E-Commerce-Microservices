@@ -58,7 +58,7 @@ public class AuthServiceImpl implements AuthService{
        User savedUser = userRepo.save(user);
 
        // creating access token
-        String accessToken = jwtService.generateToken(savedUser.getEmail());
+        String accessToken = jwtService.generateToken(savedUser);
 
         // refresh tokens
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(savedUser);
@@ -98,7 +98,7 @@ public class AuthServiceImpl implements AuthService{
                         new UserNotFoundException("User not found"));
 
         // generating access token
-        String accessToken = jwtService.generateToken(user.getEmail());
+        String accessToken = jwtService.generateToken(user);
 
         // revoke previous tokens for the user, every time there is a new login
         refreshTokenService.revokeAllUserTokens(user);
@@ -174,10 +174,10 @@ public class AuthServiceImpl implements AuthService{
 
         User user = refreshToken.getUser();
 
-        String accessToken = jwtService.generateToken(user.getEmail());
+        String accessToken = jwtService.generateToken(user);
 
         // revoke token
-        refreshTokenService.revokeToken(refreshToken);
+        refreshTokenService.revokeRefreshToken(refreshToken);
 
         // create new refresh token
      //   RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(refreshToken.getUser());
@@ -199,7 +199,7 @@ public class AuthServiceImpl implements AuthService{
 
         RefreshToken refreshToken = refreshTokenService.validateRefreshToken(request.getRefreshToken());
 
-        refreshTokenService.revokeToken(refreshToken);
+        refreshTokenService.revokeRefreshToken(refreshToken);
     }
 
 

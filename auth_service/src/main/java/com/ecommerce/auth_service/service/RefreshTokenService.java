@@ -75,7 +75,7 @@ public class RefreshTokenService {
     }
 
 
-    public void revokeToken(RefreshToken refreshToken) {
+    public void revokeRefreshToken(RefreshToken refreshToken) {
 
         // for idempotency
         if(!refreshToken.isRevoked()) {
