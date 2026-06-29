@@ -7,7 +7,6 @@ import com.ecommerce.auth_service.entity.User;
 import com.ecommerce.auth_service.exception.EmailAlreadyExistsException;
 import com.ecommerce.auth_service.exception.InvalidCredentialsException;
 import com.ecommerce.auth_service.exception.UserNotFoundException;
-import com.ecommerce.auth_service.repo.RefreshTokenRepo;
 import com.ecommerce.auth_service.repo.UserRepo;
 import com.ecommerce.auth_service.util.JwtService;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +33,6 @@ public class AuthServiceImpl implements AuthService{
     private final AuthenticationManager authenticationManager;
 
     private final RefreshTokenService refreshTokenService;
-    private final RefreshTokenRepo refreshTokenRepo;
 
 
 
@@ -57,28 +55,15 @@ public class AuthServiceImpl implements AuthService{
 
        User savedUser = userRepo.save(user);
 
-       // creating access token
-        String accessToken = jwtService.generateToken(savedUser);
 
-        // refresh tokens
-        RefreshToken refreshToken = refreshTokenService.createRefreshToken(savedUser);
-
-
-        return AuthResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken.getToken())
-                .message("User registered successfully")
-                .build();
+        return createAuthenticationResponse(savedUser, "User registered successfully");
 
     }
 
 
-
-    @Override
-    public AuthResponse login(LoginRequest request) {
+    private void authenticate(LoginRequest request) {
 
         try {
-
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
                             request.getEmail(),
@@ -92,16 +77,22 @@ public class AuthServiceImpl implements AuthService{
                     "Invalid credentials"
             );
         }
+    }
 
-        User user = userRepo.findByEmail(request.getEmail())
+
+    private User getUserByEmail(String email) {
+
+        return userRepo.findByEmail(email)
                 .orElseThrow(() ->
                         new UserNotFoundException("User not found"));
 
+    }
+
+
+    private AuthResponse createAuthenticationResponse(User user, String message) {
+
         // generating access token
         String accessToken = jwtService.generateToken(user);
-
-        // revoke previous tokens for the user, every time there is a new login
-        refreshTokenService.revokeAllUserTokens(user);
 
         // after authentication succeeds, create refresh tokens
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
@@ -109,8 +100,24 @@ public class AuthServiceImpl implements AuthService{
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken.getToken())
-                .message("Login successful")
+                .message(message)
                 .build();
+
+    }
+
+
+    @Override
+    public AuthResponse login(LoginRequest request) {
+
+        authenticate(request);
+
+        User user = getUserByEmail(request.getEmail());
+
+        // rotate refresh tokens
+        // revoke previous tokens for the user, every time there is a new login
+        refreshTokenService.revokeAllUserTokens(user);
+
+       return createAuthenticationResponse(user, "Login successful");
     }
 
 
@@ -123,9 +130,7 @@ public class AuthServiceImpl implements AuthService{
 
         String email = authentication.getName();
 
-        User user = userRepo.findByEmail(email)
-                .orElseThrow(() ->
-                        new UserNotFoundException("User not found"));
+        User user = getUserByEmail(email);
 
         return UserProfileResponse.builder()
                 .id(user.getId())
